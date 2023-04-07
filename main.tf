@@ -1,18 +1,23 @@
-//тест розгортування глпі в гуглі
-
+# Задаємо провайдера Google Cloud
 provider "google" {
-  project = "GLPI"
-  region  = "us-central1"
-  zone    = "us-central1-c"
+    credentials = file("C:/users/a.kulikov/desktop/ethereal-pride-383012-fd44ce2709a1.json")
+  project = "ethereal-pride-383012"
+  region  = "europe-west3"
+  zone    = "europe-west3-c"
+}
+
+resource "google_compute_network" "glpi-network" {
+  name                    = "glpi-network"
+  auto_create_subnetworks = false
 }
 
 # Створення бази даних MySQL на Cloud SQL
 resource "google_sql_database_instance" "glpi-db" {
   name             = "glpi-db"
   database_version = "MYSQL_5_7"
-  region           = "us-central1"
+  region           = "europe-west3"
   settings {
-    tier = "db-n1-standard-1"
+    tier = "db-f1-micro"
   }
 }
 
@@ -36,37 +41,23 @@ resource "google_compute_instance" "glpi" {
   metadata_startup_script = <<-EOF
     #!/bin/bash
     sudo apt-get update
-    sudo apt-get install -y nginx php-fpm
-    sudo wget https://github.com/glpi-project/glpi/releases/download/10.0.7/glpi-10.0.7.tgz
-    sudo tar -xvzf glpi-10.0.7.tgz -C /var/www/html/
-    sudo rm /etc/nginx/sites-enabled/default
-    sudo tee /etc/nginx/sites-available/glpi <<EOF1
-      server {
-        listen 80;
-        root /var/www/html/glpi;
-        index index.php;
-        location / {
-          try_files \$uri \$uri/ /index.php?\$args;
-        }
-        location ~ \.php$ {
-          include snippets/fastcgi-php.conf;
-          fastcgi_pass unix:/var/run/php/php7.3-fpm.sock;
-        }
-      }
-    EOF1
-    sudo ln -s /etc/nginx/sites-available/glpi /etc/nginx/sites-enabled/glpi
-    sudo service nginx restart
+    sudo apt-get install -y apache2 php
+    sudo wget https://github.com/glpi-project/glpi/releases/download/9.5.5/glpi-9.5.5.tgz
+    sudo tar -xvzf glpi-9.5.5.tgz -C /var/www/html/
   EOF
 }
 
 # Відкриваємо доступ до порту 80 з інтернету
 resource "google_compute_firewall" "glpi-allow-http" {
-  name    = "glpi-allow-http"
-  network = "default"
+  name        = "glpi-allow-http"
+  network     = google_compute_network.glpi-network.name
+  direction   = "INGRESS"
+  priority    = 1000
+
+  source_ranges = ["0.0.0.0/0"]
+
   allow {
     protocol = "tcp"
     ports    = ["80"]
   }
-  source_ranges = ["0.0.0.0/0"]
-  target_tags   = [google_compute_instance.glpi.tags["items"][0]]
 }
